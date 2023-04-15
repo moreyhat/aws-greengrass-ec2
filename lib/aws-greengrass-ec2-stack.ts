@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
 
 export class AwsGreengrassEc2Stack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -25,27 +26,70 @@ export class AwsGreengrassEc2Stack extends cdk.Stack {
 
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
-      'adduser --system ggc_user',
+      'amazon-linux-extras install java-openjdk11',
+      'useradd --system --create-home ggc_user',
       'groupadd --system ggc_group',
-      'curl https://raw.githubusercontent.com/tianon/cgroupfs-mount/951c38ee8d802330454bdede20d85ec1c0f8d312/cgroupfs-mount > cgroupfs-mount.sh',
-      'chmod +x cgroupfs-mount.sh',
-      'bash ./cgroupfs-mount.sh',
-      'yum install -y java-1.8.0-openjdk',
-      'mkdir greengrass-dependency-checker-GGCv1.11.x',
-      'cd greengrass-dependency-checker-GGCv1.11.x',
-      'wget https://github.com/aws-samples/aws-greengrass-samples/raw/master/greengrass-dependency-checker-GGCv1.11.x.zip',
-      'unzip greengrass-dependency-checker-GGCv1.11.x.zip',
-      'cd greengrass-dependency-checker-GGCv1.11.x',
-      'sudo ./check_ggc_dependencies | more'
+      'echo "root ALL=(ALL:ALL) ALL" | sudo EDITOR="tee -a" visudo'
     );
 
-    const instance = new ec2.Instance(this, 'GreengrassInstance', {
+    const policyDocument = new iam.PolicyDocument({
+      statements: [
+        new iam.PolicyStatement({
+          actions: [
+            'iam:AttachRolePolicy',
+            'iam:CreatePolicy',
+            'iam:CreateRole',
+            'iam:GetPolicy',
+            'iam:GetRole',
+            'iam:PassRole',
+            'iot:AddThingToThingGroup',
+            'iot:AttachPolicy',
+            'iot:AttachThingPrincipal',
+            'iot:CreateKeysAndCertificate',
+            'iot:CreatePolicy',
+            'iot:CreateRoleAlias',
+            'iot:CreateThing',
+            'iot:CreateThingGroup',
+            'iot:DescribeEndpoint',
+            'iot:DescribeRoleAlias',
+            'iot:DescribeThingGroup',
+            'iot:GetPolicy',
+            'greengrass:CreateDeployment',
+            'iot:CancelJob',
+            'iot:CreateJob',
+            'iot:DeleteThingShadow',
+            'iot:DescribeJob',
+            'iot:DescribeThing',
+            'iot:DescribeThingGroup',
+            'iot:GetThingShadow',
+            'iot:UpdateJob',
+            'iot:UpdateThingShadow',
+            's3:GetObject',
+          ],
+          resources: ['*'],
+        }),
+      ],
+    });
+
+    const managedPolicy = new iam.ManagedPolicy(this, 'GreengrassManagedPolicy', {
+      description: 'Managed policy for Greengrass',
+      document: policyDocument,
+    });
+
+    const role = new iam.Role(this, 'Role', {
+      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+      description: 'Greengrass EC2 client role',
+      managedPolicies: [managedPolicy],
+    });
+
+    new ec2.Instance(this, 'GreengrassInstance', {
       vpc: vpc,
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE4_GRAVITON, ec2.InstanceSize.NANO),
       machineImage: ec2.MachineImage.latestAmazonLinux({
         generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
         cpuType: ec2.AmazonLinuxCpuType.ARM_64,
       }),
+      role: role,
       ssmSessionPermissions: true,
       securityGroup: securityGroup,
       userData: userData,
