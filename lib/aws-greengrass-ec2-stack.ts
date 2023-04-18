@@ -29,7 +29,12 @@ export class AwsGreengrassEc2Stack extends cdk.Stack {
       'amazon-linux-extras install java-openjdk11',
       'useradd --system --create-home ggc_user',
       'groupadd --system ggc_group',
-      'echo "root ALL=(ALL:ALL) ALL" | sudo EDITOR="tee -a" visudo'
+      'echo "root ALL=(ALL:ALL) ALL" | sudo EDITOR="tee -a" visudo',
+      'amazon-linux-extras install docker',
+      'service docker start',
+      'usermod -a -G docker ec2-user',
+      'usermod -a -G docker ggc_user',
+      'chkconfig docker on'
     );
 
     const policyDocument = new iam.PolicyDocument({
@@ -84,7 +89,7 @@ export class AwsGreengrassEc2Stack extends cdk.Stack {
 
     new ec2.Instance(this, 'GreengrassInstance', {
       vpc: vpc,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE4_GRAVITON, ec2.InstanceSize.NANO),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE4_GRAVITON, ec2.InstanceSize.MICRO),
       machineImage: ec2.MachineImage.latestAmazonLinux({
         generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
         cpuType: ec2.AmazonLinuxCpuType.ARM_64,
