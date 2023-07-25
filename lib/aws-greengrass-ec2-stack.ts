@@ -7,6 +7,8 @@ export class AwsGreengrassEc2Stack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    const numClients = this.node.tryGetContext('NumClients') || 2;
+
     const vpc = new ec2.Vpc(this, 'GreengrassVPC', {
       maxAzs: 1,
       subnetConfiguration: [
@@ -87,17 +89,19 @@ export class AwsGreengrassEc2Stack extends cdk.Stack {
       managedPolicies: [managedPolicy],
     });
 
-    new ec2.Instance(this, 'GreengrassInstance', {
-      vpc: vpc,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE4_GRAVITON, ec2.InstanceSize.MICRO),
-      machineImage: ec2.MachineImage.latestAmazonLinux({
-        generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
-        cpuType: ec2.AmazonLinuxCpuType.ARM_64,
-      }),
-      role: role,
-      ssmSessionPermissions: true,
-      securityGroup: securityGroup,
-      userData: userData,
-    });
+    for (let i = 0; i < numClients; i++) {
+      new ec2.Instance(this, `HFL/Client${i + 1}`, {
+        vpc: vpc,
+        instanceType: ec2.InstanceType.of(ec2.InstanceClass.M7G, ec2.InstanceSize.LARGE),
+        machineImage: ec2.MachineImage.latestAmazonLinux({
+          generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
+          cpuType: ec2.AmazonLinuxCpuType.ARM_64,
+        }),
+        role: role,
+        ssmSessionPermissions: true,
+        securityGroup: securityGroup,
+        userData: userData,
+      });
+    }
   }
 }
